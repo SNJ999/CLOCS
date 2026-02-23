@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Stellar Constellation Clock</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            background: #000; 
+            overflow: hidden; 
+            min-height: 100vh; 
+            touch-action: none; /* Запрещает браузеру листать страницу, пока мы водим по экрану */
+            cursor: crosshair; 
+        }
+        canvas { display: block; width: 100vw; height: 100vh; }
+    </style>
+</head>
+<body>
+
+<canvas id="starCanvas"></canvas>
+
+<script>
+    const canvas = document.getElementById('starCanvas');
+    const ctx = canvas.getContext('2d');
+
+    let w, h;
+    let stars = [];
+    let isPressed = false;
+    let lightPower = 0;
+
+    const font = {
+        '0': [31, 33, 35, 37, 41, 49, 31],
+        '1': [4, 12, 4, 4, 4, 4, 14],
+        '2': [30, 33, 1, 2, 4, 8, 63],
+        '3': [30, 33, 1, 14, 1, 33, 30],
+        '4': [2, 6, 10, 18, 63, 2, 2],
+        '5': [63, 32, 62, 1, 1, 33, 30],
+        '6': [30, 33, 32, 62, 33, 33, 30],
+        '7': [63, 1, 2, 4, 8, 16, 16],
+        '8': [30, 33, 33, 30, 33, 33, 30],
+        '9': [30, 33, 33, 31, 1, 33, 30],
+        ':': [0, 12, 12, 0, 12, 12, 0]
+    };
+
+    function init() {
+        w = canvas.width = window.innerWidth;
+        h = canvas.height = window.innerHeight;
+        stars = [];
+        for (let i = 0; i < 1500; i++) {
+            stars.push({
+                x: Math.random() * w,
+                y: Math.random() * h,
+                z: Math.random() * w,
+                ox: 0, oy: 0,
+                inDigit: false
+            });
+        }
+    }
+
+    // --- ЛОГИКА НАЖАТИЯ ДЛЯ ТЕЛЕФОНА И ПК ---
+    const startPress = (e) => {
+        isPressed = true;
+        if (e.cancelable) e.preventDefault();
+    };
+    const endPress = () => {
+        isPressed = false;
+    };
+
+    // Слушатели для мыши
+    window.addEventListener('mousedown', startPress);
+    window.addEventListener('mouseup', endPress);
+    
+    // Слушатели для сенсора (телефона)
+    window.addEventListener('touchstart', startPress, { passive: false });
+    window.addEventListener('touchend', endPress, { passive: false });
+    window.addEventListener('touchcancel', endPress, { passive: false });
+
+    function getTimePoints() {
+        const now = new Date();
+        const str = now.toLocaleTimeString('ru-RU', {hour: '2-digit', minute:'2-digit', second:'2-digit'});
+        const points = [];
+        const scale = w < 500 ? 6 : 10; // Уменьшаем масштаб для телефонов
+        const charW = scale * 6;
+        const startX = (w - (str.length * charW)) / 2;
+        const startY = (h - (scale * 7)) / 2;
+
+        for (let i = 0; i < str.length; i++) {
+            const char = str[i];
+            const pattern = font[char] || [];
+            pattern.forEach((row, rowIndex) => {
+                for (let colIndex = 0; colIndex < 6; colIndex++) {
+                    if ((row >> (5 - colIndex)) & 1) {
+                        points.push({
+                            x: startX + i * charW + colIndex * scale,
+                            y: startY + rowIndex * scale
+                        });
+                    }
+                }
+            });
+        }
+        return points;
+    }
+
+    function draw() {
+        ctx.fillStyle = 'black';
+        ctx.fillRect(0, 0, w, h);
+
+        const timePoints = getTimePoints();
+        
+        if (isPressed) {
+            if (lightPower < 1) lightPower += 0.05;
+        } else {
+            if (lightPower > 0) lightPower -= 0.05;
+        }
+
+        stars.forEach((s, i) => {
+            if (isPressed && i < timePoints.length) {
+                const target = timePoints[i];
+                // Плавное притяжение к точкам цифр
+                s.x += (target.x - s.x) * 0.15;
+                s.y += (target.y - s.y) * 0.15;
+                s.inDigit = true;
+            } else {
+                // Обычный полет звезд
+                s.z -= 2;
+                if (s.z <= 0) s.z = w;
+                
+                if (s.inDigit) {
+                    s.inDigit = false;
+                    s.x = Math.random() * w;
+                    s.y = Math.random() * h;
+                }
+
+                const p = 600 / (600 + s.z);
+                const x = (s.x - w / 2) * p + w / 2;
+                const y = (s.y - h / 2) * p + h / 2;
+                
+                s.ox = x;
+                s.oy = y;
+            }
+
+            const opacity = s.inDigit ? 0.3 + lightPower * 0.7 : (1 - s.z / w) * 0.5;
+            const size = s.inDigit ? 2 : (1 - s.z / w) * 3;
+            
+            ctx.fillStyle = `rgba(255, 255, 255, ${opacity})`;
+            
+            if (s.inDigit) {
+                ctx.beginPath();
+                ctx.arc(s.x, s.y, size, 0, Math.PI * 2);
+                ctx.fill();
+            } else {
+                ctx.fillRect(s.ox, s.oy, size, size);
+            }
+        });
+
+        requestAnimationFrame(draw);
+    }
+
+    window.addEventListener('resize', init);
+    init();
+    draw();
+</script>
+</body>
+</html>

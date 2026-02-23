@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>True Maze Clock</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background-color: #050505;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            overflow: hidden;
+            font-family: 'Courier New', monospace;
+        }
+        .container {
+            position: relative;
+            width: 95vw;
+            height: 95vw;
+            max-width: 400px;
+            max-height: 400px;
+        }
+        canvas {
+            width: 100%;
+            height: 100%;
+            border: 2px solid #222;
+        }
+        .overlay {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.8);
+            padding: 10px;
+            border: 1px solid #00ff88;
+            color: #00ff88;
+            text-align: center;
+            pointer-events: none;
+            z-index: 10;
+        }
+        #time { font-size: 2rem; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <canvas id="mazeCanvas"></canvas>
+        <div class="overlay">
+            <div id="time">00:00:00</div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('mazeCanvas');
+        const ctx = canvas.getContext('2d');
+        const timeEl = document.getElementById('time');
+
+        const rows = 12, cols = 12;
+        const cellSize = 40; 
+        canvas.width = cols * cellSize;
+        canvas.height = rows * cellSize;
+
+        let maze = [];
+        let solvePath = [];
+
+        function initMaze() {
+            maze = [];
+            for (let r = 0; r < rows; r++) {
+                maze[r] = [];
+                for (let c = 0; c < cols; c++) {
+                    maze[r][c] = { r, c, visited: false, walls: [true, true, true, true] };
+                }
+            }
+        }
+
+        function generateMaze(r, c) {
+            maze[r][c].visited = true;
+            const neighbors = [[r-1, c, 0, 2], [r, c+1, 1, 3], [r+1, c, 2, 0], [r, c-1, 3, 1]].sort(() => Math.random() - 0.5);
+            for (let [nr, nc, w, opp] of neighbors) {
+                if (nr >= 0 && nr < rows && nc >= 0 && nc < cols && !maze[nr][nc].visited) {
+                    maze[r][c].walls[w] = false;
+                    maze[nr][nc].walls[opp] = false;
+                    generateMaze(nr, nc);
+                }
+            }
+        }
+
+        // Поиск пути от старта до финиша (BFS)
+        function findPath() {
+            let start = maze[0][0];
+            let end = maze[rows-1][cols-1];
+            let queue = [start];
+            let visited = new Set();
+            let parentMap = new Map();
+
+            visited.add(`0,0`);
+            
+            while(queue.length > 0) {
+                let curr = queue.shift();
+                if(curr === end) break;
+
+                const dirs = [[-1, 0, 0], [0, 1, 1], [1, 0, 2], [0, -1, 3]];
+                for(let [dr, dc, wallIdx] of dirs) {
+                    let nr = curr.r + dr, nc = curr.c + dc;
+                    if(nr >= 0 && nr < rows && nc >= 0 && nc < cols && !curr.walls[wallIdx]) {
+                        let next = maze[nr][nc];
+                        if(!visited.has(`${nr},${nc}`)) {
+                            visited.add(`${nr},${nc}`);
+                            parentMap.set(next, curr);
+                            queue.push(next);
+                        }
+                    }
+                }
+            }
+
+            let path = [];
+            let temp = end;
+            while(temp) {
+                path.push(temp);
+                temp = parentMap.get(temp);
+            }
+            return path.reverse();
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Рисуем стены
+            ctx.strokeStyle = "#444";
+            ctx.lineWidth = 2;
+            for (let r = 0; r < rows; r++) {
+                for (let c = 0; c < cols; c++) {
+                    let x = c * cellSize, y = r * cellSize;
+                    if (maze[r][c].walls[0]) ctx.strokeRect(x, y, cellSize, 0);
+                    if (maze[r][c].walls[1]) ctx.strokeRect(x + cellSize, y, 0, cellSize);
+                    if (maze[r][c].walls[2]) ctx.strokeRect(x, y + cellSize, cellSize, 0);
+                    if (maze[r][c].walls[3]) ctx.strokeRect(x, y, 0, cellSize);
+                }
+            }
+
+            const now = new Date();
+            const s = now.getSeconds();
+            const ms = now.getMilliseconds();
+            timeEl.innerText = now.toLocaleTimeString();
+
+            // Рассчитываем позицию на пути
+            // Общее количество шагов на 60 секунд
+            const totalPathSteps = solvePath.length;
+            const progress = (s + ms/1000) / 60;
+            const stepIndex = Math.floor(progress * totalPathSteps);
+            
+            if (solvePath[stepIndex]) {
+                const cell = solvePath[stepIndex];
+                ctx.fillStyle = "#00ff88";
+                ctx.shadowBlur = 15;
+                ctx.shadowColor = "#00ff88";
+                ctx.beginPath();
+                ctx.arc(cell.c * cellSize + cellSize/2, cell.r * cellSize + cellSize/2, 8, 0, Math.PI*2);
+                ctx.fill();
+            }
+
+            if (s === 59 && ms > 950) resetMaze();
+
+            requestAnimationFrame(draw);
+        }
+
+        function resetMaze() {
+            initMaze();
+            generateMaze(0, 0);
+            solvePath = findPath();
+        }
+
+        resetMaze();
+        draw();
+    </script>
+</body>
+</html>

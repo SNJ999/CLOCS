@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Matrix Hyper-Rain Gyro Clock</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            background: #000; 
+            overflow: hidden; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            min-height: 100vh;
+            touch-action: none; 
+        }
+        canvas { display: block; width: 100%; height: 100%; }
+        .ui-hint {
+            position: fixed;
+            bottom: 20px;
+            color: rgba(0, 255, 65, 0.4);
+            font-family: monospace;
+            font-size: 10px;
+            letter-spacing: 2px;
+            pointer-events: none;
+            z-index: 10;
+            text-align: center;
+            width: 100%;
+        }
+    </style>
+</head>
+<body>
+
+    <canvas id="canvas"></canvas>
+    <div class="ui-hint">TOUCH OR TILT DEVICE</div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+
+        let w, h;
+        const fontSize = 14; 
+        let columns = [];
+        const chars = "ｦｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄ0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ$+-*/=%\"'#&_(),.;:?!\\|{}<>[]^~";
+        
+        let target = { x: 0, y: 0 };
+        let mouse = { x: 0, y: 0 };
+        
+        // Переменные для гироскопа
+        let gyro = { x: 0, y: 0 };
+        let hasGyro = false;
+
+        function init() {
+            w = canvas.width = window.innerWidth;
+            h = canvas.height = window.innerHeight;
+            
+            target.x = mouse.x = w / 2;
+            target.y = mouse.y = h / 2;
+            
+            const colCount = Math.floor(w / 8); 
+            columns = [];
+            for (let i = 0; i < colCount; i++) {
+                columns.push({
+                    x: i * 8,
+                    y: Math.random() * h,
+                    speed: 2 + Math.random() * 5,
+                    length: Math.floor(Math.random() * 15) + 10
+                });
+            }
+        }
+
+        const updatePos = (e) => {
+            if (e.type === 'touchmove') e.preventDefault();
+            // Если пользователь коснулся экрана, отключаем на время влияние гироскопа для этой точки
+            hasGyro = false; 
+
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            
+            mouse.x = clientX;
+            mouse.y = clientY;
+        };
+
+        // Обработка наклона устройства
+        window.addEventListener('deviceorientation', (e) => {
+            // gamma: наклон влево/вправо (-90 до 90)
+            // beta: наклон вперед/назад (-180 до 180)
+            if (e.gamma !== null && e.beta !== null) {
+                hasGyro = true;
+                // Преобразуем градусы наклона в координаты на экране
+                // Ограничиваем чувствительность, чтобы часы не улетали слишком далеко
+                const tiltX = (e.gamma / 45) * (w / 2); 
+                const tiltY = ((e.beta - 45) / 45) * (h / 2); // 45 градусов - среднее положение в руках
+                
+                gyro.x = (w / 2) + tiltX;
+                gyro.y = (h / 2) + tiltY;
+            }
+        });
+
+        window.addEventListener('mousemove', updatePos);
+        window.addEventListener('touchstart', updatePos, { passive: false });
+        window.addEventListener('touchmove', updatePos, { passive: false });
+
+        function draw() {
+            ctx.fillStyle = "rgba(0, 0, 0, 0.15)";
+            ctx.fillRect(0, 0, w, h);
+
+            // Плавное следование за целью (пальцем или наклоном)
+            const finalTargetX = hasGyro ? gyro.x : mouse.x;
+            const finalTargetY = hasGyro ? gyro.y : mouse.y;
+
+            target.x += (finalTargetX - target.x) * 0.08;
+            target.y += (finalTargetY - target.y) * 0.08;
+
+            const now = new Date();
+            const timeStr = now.toLocaleTimeString('ru-RU', {hour: '2-digit', minute:'2-digit', second:'2-digit'});
+
+            ctx.font = fontSize + "px monospace";
+
+            columns.forEach(col => {
+                for (let j = 0; j < col.length; j++) {
+                    const charY = col.y - (j * fontSize);
+                    if (charY < -fontSize || charY > h + fontSize) continue;
+
+                    const dx = col.x - target.x;
+                    const dy = charY - target.y;
+                    const dist = Math.sqrt(dx*dx + dy*dy);
+                    
+                    const maxDist = 180;
+                    let offsetX = 0;
+
+                    if (dist < maxDist) {
+                        const pull = (maxDist - dist) / maxDist;
+                        offsetX = -dx * pull * 0.5; 
+                    }
+
+                    const char = chars[Math.floor(Math.random() * chars.length)];
+                    
+                    if (j === 0) {
+                        ctx.fillStyle = dist < 60 ? "#fff" : "#0f0";
+                    } else {
+                        const alpha = (1 - (j / col.length)) * (dist < 100 ? 0.8 : 0.3);
+                        ctx.fillStyle = `rgba(0, 255, 65, ${alpha})`;
+                    }
+
+                    ctx.fillText(char, col.x + offsetX, charY);
+                }
+
+                col.y += col.speed;
+                if (col.y > h + (col.length * fontSize)) {
+                    col.y = -fontSize;
+                    col.speed = 2 + Math.random() * 5;
+                }
+            });
+
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = "#000";
+            
+            const clockSize = w < 500 ? 30 : 45;
+            ctx.font = `bold ${clockSize}px Courier New`;
+            
+            ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
+            ctx.fillText(timeStr, target.x, target.y);
+            
+            ctx.lineWidth = 1;
+            ctx.strokeStyle = "rgba(0, 255, 65, 0.5)";
+            ctx.strokeText(timeStr, target.x, target.y);
+
+            ctx.shadowBlur = 0;
+            requestAnimationFrame(draw);
+        }
+
+        window.addEventListener('resize', init);
+        init();
+        draw();
+    </script>
+</body>
+</html>

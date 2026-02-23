@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Nokia Super-Adaptive Clock</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background-color: #000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            overflow: hidden;
+            touch-action: none;
+        }
+        canvas {
+            display: block;
+            image-rendering: pixelated;
+        }
+    </style>
+</head>
+<body>
+
+    <canvas id="clock"></canvas>
+
+<script>
+    const canvas = document.getElementById('clock');
+    const ctx = canvas.getContext('2d');
+
+    const digits = {
+        '0': [[1,1,1],[1,0,1],[1,0,1],[1,0,1],[1,1,1]],
+        '1': [[0,1,0],[0,1,0],[0,1,0],[0,1,0],[0,1,0]],
+        '2': [[1,1,1],[0,0,1],[1,1,1],[1,0,0],[1,1,1]],
+        '3': [[1,1,1],[0,0,1],[1,1,1],[0,0,1],[1,1,1]],
+        '4': [[1,0,1],[1,0,1],[1,1,1],[0,0,1],[0,0,1]],
+        '5': [[1,1,1],[1,0,0],[1,1,1],[0,0,1],[1,1,1]],
+        '6': [[1,1,1],[1,0,0],[1,1,1],[1,0,1],[1,1,1]],
+        '7': [[1,1,1],[0,0,1],[0,1,0],[0,1,0],[0,1,0]],
+        '8': [[1,1,1],[1,0,1],[1,1,1],[1,0,1],[1,1,1]],
+        '9': [[1,1,1],[1,0,1],[1,1,1],[0,0,1],[1,1,1]]
+    };
+
+    let cellS;
+    let isVertical = false;
+
+    function resize() {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        isVertical = canvas.height > canvas.width;
+        
+        if (isVertical) {
+            cellS = Math.floor(canvas.width / 35);
+        } else {
+            cellS = Math.floor(canvas.width / 80);
+        }
+        const maxCellByHeight = Math.floor(canvas.height / (isVertical ? 45 : 20));
+        if (cellS > maxCellByHeight) cellS = maxCellByHeight;
+    }
+
+    window.addEventListener('resize', resize);
+    resize();
+
+    class PrecisionSnake {
+        constructor(color) {
+            this.color = color;
+            this.revealedCount = 0;
+            this.head = {x: 0, y: 0};
+        }
+
+        getPixels(val, offsetX, offsetY) {
+            const str = val.toString().padStart(2, '0');
+            const pixels = [];
+            let curX = offsetX;
+
+            for (let char of str) {
+                const matrix = digits[char];
+                for (let y = 0; y < matrix.length; y++) {
+                    for (let x = 0; x < matrix[y].length; x++) {
+                        if (matrix[y][x]) {
+                            for(let py=0; py<2; py++) {
+                                for(let px=0; px<2; px++) {
+                                    pixels.push({x: curX + x*2 + px, y: offsetY + y*2 + py});
+                                }
+                            }
+                        }
+                    }
+                }
+                curX += 8;
+            }
+            return pixels;
+        }
+
+        draw(val, progress, ox, oy) {
+            const allPixels = this.getPixels(val, ox, oy);
+            // Ограничиваем прогресс до 1 (100%)
+            const cleanProgress = Math.min(1, progress);
+            this.revealedCount = Math.floor(cleanProgress * allPixels.length);
+            
+            if (this.revealedCount > 0) {
+                this.head = allPixels[Math.min(this.revealedCount - 1, allPixels.length - 1)];
+            }
+
+            ctx.fillStyle = '#111';
+            allPixels.forEach(p => ctx.fillRect(p.x * cellS, p.y * cellS, cellS - 1, cellS - 1));
+
+            ctx.fillStyle = this.color;
+            ctx.shadowBlur = cellS;
+            ctx.shadowColor = this.color;
+            for (let i = 0; i < this.revealedCount; i++) {
+                const p = allPixels[i];
+                ctx.fillRect(p.x * cellS, p.y * cellS, cellS - 1, cellS - 1);
+            }
+
+            if (this.revealedCount > 0 && this.revealedCount < allPixels.length) {
+                ctx.fillStyle = "#fff";
+                ctx.shadowBlur = cellS * 2;
+                ctx.shadowColor = "#fff";
+                ctx.fillRect(this.head.x * cellS, this.head.y * cellS, cellS - 1, cellS - 1);
+            }
+            ctx.shadowBlur = 0;
+        }
+    }
+
+    const hSnake = new PrecisionSnake('#4a90e2');
+    const mSnake = new PrecisionSnake('#39d353');
+    const sSnake = new PrecisionSnake('#ff4b5c');
+
+    function render() {
+        ctx.fillStyle = '#000';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        const now = new Date();
+        const ms = now.getMilliseconds();
+        const s = now.getSeconds();
+        const m = now.getMinutes();
+        const h = now.getHours();
+
+        // Настройка пауз (в секундах)
+        const pauseSeconds = 1.5; 
+
+        // Секунды: закрашиваются за 850мс, 150мс стоят полными
+        const sProg = Math.min(1, ms / 850);
+
+        // Минуты: закрашиваются за (60 - pause) секунд
+        const mProg = s / (60 - pauseSeconds);
+
+        // Часы: закрашиваются за (60 - pause) минут
+        const hProg = m / (60 - pauseSeconds);
+
+        if (isVertical) {
+            const centerX = Math.floor((canvas.width / cellS - 15) / 2);
+            const startY = Math.floor((canvas.height / cellS - 35) / 2);
+            hSnake.draw(h, hProg, centerX, startY);
+            mSnake.draw(m, mProg, centerX, startY + 12);
+            sSnake.draw(s, sProg, centerX, startY + 24);
+        } else {
+            const totalW = 55;
+            const startX = Math.floor((canvas.width / cellS - totalW) / 2);
+            const centerY = Math.floor((canvas.height / cellS - 10) / 2);
+            hSnake.draw(h, hProg, startX, centerY);
+            mSnake.draw(m, mProg, startX + 20, centerY);
+            sSnake.draw(s, sProg, startX + 40, centerY);
+        }
+
+        requestAnimationFrame(render);
+    }
+
+    render();
+</script>
+
+</body>
+</html>

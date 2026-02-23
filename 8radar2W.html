@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Radar Clock Precision UI</title>
+    <style>
+        :root {
+            --neon-green: #00ff41;
+            --dark-bg: #010501;
+            --scan-line: rgba(0, 255, 65, 0.08);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            background-color: var(--dark-bg);
+            background-image: 
+                linear-gradient(var(--scan-line) 1px, transparent 1px),
+                linear-gradient(90deg, var(--scan-line) 1px, transparent 1px);
+            background-size: 25px 25px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            overflow: hidden;
+            font-family: 'Courier New', monospace;
+            color: var(--neon-green);
+        }
+
+        .main-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 90vw;
+            max-width: 500px;
+        }
+
+        /* Верхняя панель как на картинке */
+        .header {
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            padding-bottom: 5px;
+            border-bottom: 1px solid var(--neon-green);
+            margin-bottom: 30px;
+            font-size: 14px;
+            letter-spacing: 2px;
+        }
+
+        .radar-frame {
+            position: relative;
+            width: 80vw;
+            height: 80vw;
+            max-width: 380px;
+            max-height: 380px;
+            border: 2px solid var(--neon-green);
+            border-radius: 50%;
+            padding: 8px;
+            margin-bottom: 40px;
+            box-shadow: 0 0 20px rgba(0, 255, 65, 0.15);
+        }
+
+        .radar-screen {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle, #0a1a0a 0%, #000 100%);
+            border-radius: 50%;
+            overflow: hidden;
+            border: 1px solid rgba(0, 255, 65, 0.3);
+        }
+
+        .sweep {
+            position: absolute;
+            width: 200%; height: 200%;
+            top: -50%; left: -50%;
+            background: conic-gradient(from 0deg, var(--neon-green) 0deg, transparent 50deg);
+            opacity: 0.5;
+            z-index: 10;
+        }
+
+        .target {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform-origin: bottom center;
+            opacity: 0;
+            transition: opacity 1.8s ease-out;
+        }
+
+        .marker {
+            width: 14px; height: 14px;
+            border: 2px solid var(--neon-green);
+            background: rgba(0, 255, 65, 0.2);
+            position: relative;
+        }
+
+        .marker::before {
+            content: attr(data-label);
+            position: absolute;
+            top: -15px; left: 50%;
+            transform: translateX(-50%);
+            font-size: 9px;
+            font-weight: bold;
+        }
+
+        #h-hand { height: 22%; margin-top: -22%; }
+        #m-hand { height: 35%; margin-top: -35%; }
+        #s-hand { height: 45%; margin-top: -45%; }
+        #s-hand .marker { border-color: #ff3366; background: rgba(255, 51, 102, 0.2); }
+
+        .ring {
+            position: absolute; top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            border: 1px solid rgba(0, 255, 65, 0.15);
+            border-radius: 50%;
+        }
+
+        /* Нижний цифровой блок как на картинке */
+        .digital-box {
+            border: 1px solid var(--neon-green);
+            padding: 15px 40px;
+            text-align: center;
+            background: rgba(0, 255, 65, 0.02);
+        }
+
+        #time-display {
+            font-size: 32px;
+            font-weight: bold;
+            letter-spacing: 4px;
+            margin-bottom: 5px;
+        }
+
+        .sub-text {
+            font-size: 8px;
+            letter-spacing: 2px;
+            color: rgba(0, 255, 65, 0.6);
+            text-transform: uppercase;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="main-container">
+        <div class="header">
+            <span>SCANNING...</span>
+            <span id="date-display">22.02.2026</span>
+        </div>
+
+        <div class="radar-frame">
+            <div class="radar-screen">
+                <div class="sweep" id="sweep"></div>
+                <div class="ring" style="width: 33%; height: 33%;"></div>
+                <div class="ring" style="width: 66%; height: 66%;"></div>
+                
+                <div class="target" id="h-hand"><div class="marker" data-label="HRS"></div></div>
+                <div class="target" id="m-hand"><div class="marker" data-label="MIN"></div></div>
+                <div class="target" id="s-hand"><div class="marker" data-label="SEC"></div></div>
+            </div>
+        </div>
+
+        <div class="digital-box">
+            <div id="time-display">00:00:00</div>
+            <div class="sub-text">SYSTEM CALIBRATED: 100%</div>
+        </div>
+    </div>
+
+    <script>
+        const hHand = document.getElementById('h-hand');
+        const mHand = document.getElementById('m-hand');
+        const sHand = document.getElementById('s-hand');
+        const sweep = document.getElementById('sweep');
+        const timeDisplay = document.getElementById('time-display');
+        const dateDisplay = document.getElementById('date-display');
+
+        function update() {
+            const now = new Date();
+            const h = now.getHours();
+            const m = now.getMinutes();
+            const s = now.getSeconds();
+            const ms = now.getMilliseconds();
+
+            const hDeg = ((h % 12) * 30 + (m / 60) * 30);
+            const mDeg = (m * 6);
+            const sDeg = (s * 6);
+            
+            // Скорость луча: 1 полный круг за 4 секунды (атмосферно)
+            const sweepDeg = (now.getTime() / 11) % 360;
+
+            hHand.style.transform = `translateX(-50%) rotate(${hDeg}deg)`;
+            mHand.style.transform = `translateX(-50%) rotate(${mDeg}deg)`;
+            sHand.style.transform = `translateX(-50%) rotate(${sDeg}deg)`;
+            sweep.style.transform = `rotate(${sweepDeg}deg)`;
+
+            // Логика обнаружения (как ты просил)
+            [
+                { el: hHand, deg: hDeg },
+                { el: mHand, deg: mDeg },
+                { el: sHand, deg: sDeg }
+            ].forEach(item => {
+                const diff = (sweepDeg - item.deg + 360) % 360;
+                if (diff < 45 && diff > 0) {
+                    item.el.style.opacity = "1";
+                    item.el.style.transition = "opacity 0s";
+                } else {
+                    item.el.style.opacity = "0";
+                    item.el.style.transition = "opacity 2s";
+                }
+            });
+
+            timeDisplay.innerText = 
+                `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+            
+            if (s === 0 || dateDisplay.innerText === "22.02.2026") {
+                dateDisplay.innerText = now.toLocaleDateString('ru-RU').replace(/\//g, '.');
+            }
+
+            requestAnimationFrame(update);
+        }
+
+        update();
+    </script>
+</body>
+</html>

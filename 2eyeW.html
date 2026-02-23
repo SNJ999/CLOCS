@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Triple Eye Watch</title>
+    <style>
+        :root {
+            --bg-color: #0f0f0f;
+            --watch-case: #1a1a1a;
+            --eye-white: #fdfdfd;
+            --hour-clr: #00d2ff;
+            --min-clr: #ff0055;
+            --sec-clr: #ffcc00;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            background-color: var(--bg-color);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            overflow: hidden;
+            font-family: 'Segoe UI', sans-serif;
+        }
+
+        /* Главный корпус часов */
+        .watch-face {
+            position: relative;
+            width: 90vw;
+            height: 90vw;
+            max-width: 500px;
+            max-height: 500px;
+            background: var(--watch-case);
+            border-radius: 50%;
+            border: 8px solid #222;
+            box-shadow: 
+                0 0 50px rgba(0,0,0,0.8),
+                inset 0 0 30px rgba(255,255,255,0.05);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* Декоративная насечка циферблата */
+        .watch-face::before {
+            content: '';
+            position: absolute;
+            width: 95%;
+            height: 95%;
+            border-radius: 50%;
+            border: 1px dashed rgba(255,255,255,0.1);
+        }
+
+        .eyes-wrapper {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .row {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+        }
+
+        /* Базовый стиль глаза */
+        .eye {
+            position: relative;
+            background: var(--eye-white);
+            border-radius: 50%;
+            border: 3px solid #000;
+            overflow: hidden;
+            box-shadow: 
+                inset 0 10px 20px rgba(0,0,0,0.2),
+                0 5px 15px rgba(0,0,0,0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* Размеры для разных типов стрелок */
+        .eye.hour-eye { width: 120px; height: 120px; }
+        .eye.min-eye { width: 120px; height: 120px; }
+        .eye.sec-eye { width: 70px; height: 70px; }
+
+        /* Веки */
+        .eyelid {
+            position: absolute;
+            top: -100%;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #252525;
+            z-index: 10;
+            transition: top 0.12s ease-in-out;
+            border-bottom: 2px solid #000;
+        }
+        .eyelid.blink { top: 0; }
+
+        /* Зрачок */
+        .pupil {
+            position: absolute;
+            width: 50%;
+            height: 50%;
+            background: #111;
+            border-radius: 50%;
+            border: 6px solid var(--clr);
+            box-shadow: 0 0 15px var(--clr);
+            transition: transform 0.1s ease-out;
+        }
+
+        /* Блик */
+        .pupil::after {
+            content: '';
+            position: absolute;
+            top: 15%;
+            left: 15%;
+            width: 30%;
+            height: 30%;
+            background: rgba(255,255,255,0.6);
+            border-radius: 50%;
+        }
+
+        .label {
+            position: absolute;
+            color: rgba(255,255,255,0.2);
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            bottom: -20px;
+        }
+
+        /* Адаптация под мелкие экраны */
+        @media (max-width: 400px) {
+            .eye.hour-eye, .eye.min-eye { width: 100px; height: 100px; }
+            .eye.sec-eye { width: 60px; height: 60px; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="watch-face">
+        <div class="eyes-wrapper">
+            <div class="row">
+                <div class="eye hour-eye" style="--clr: var(--hour-clr)">
+                    <div class="eyelid"></div>
+                    <div class="pupil" id="h-pupil"></div>
+                    <div class="label">Hours</div>
+                </div>
+                <div class="eye min-eye" style="--clr: var(--min-clr)">
+                    <div class="eyelid"></div>
+                    <div class="pupil" id="m-pupil"></div>
+                    <div class="label">Minutes</div>
+                </div>
+            </div>
+            
+            <div class="row">
+                <div class="eye sec-eye" style="--clr: var(--sec-clr)">
+                    <div class="eyelid"></div>
+                    <div class="pupil" id="s-pupil"></div>
+                    <div class="label" style="bottom: -15px;">Seconds</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const hPupil = document.getElementById('h-pupil');
+        const mPupil = document.getElementById('m-pupil');
+        const sPupil = document.getElementById('s-pupil');
+        const eyelids = document.querySelectorAll('.eyelid');
+
+        function updateClock() {
+            const now = new Date();
+            const h = now.getHours() % 12;
+            const m = now.getMinutes();
+            const s = now.getSeconds();
+            const ms = now.getMilliseconds();
+
+            // Расчет углов
+            const hAngle = ((h + m/60) / 12) * Math.PI * 2 - Math.PI / 2;
+            const mAngle = ((m + s/60) / 60) * Math.PI * 2 - Math.PI / 2;
+            const sAngle = ((s + ms/1000) / 60) * Math.PI * 2 - Math.PI / 2;
+
+            // Двигаем зрачки (коэффициент 25-30 для смещения)
+            movePupil(hPupil, hAngle, 25);
+            movePupil(mPupil, mAngle, 25);
+            movePupil(sPupil, sAngle, 12); // У секундного глаза амплитуда меньше
+
+            requestAnimationFrame(updateClock);
+        }
+
+        function movePupil(el, angle, dist) {
+            const x = Math.cos(angle) * dist;
+            const y = Math.sin(angle) * dist;
+            el.style.transform = `translate(${x}px, ${y}px)`;
+        }
+
+        // Функция моргания
+        function blink() {
+            eyelids.forEach(lid => lid.classList.add('blink'));
+            setTimeout(() => {
+                eyelids.forEach(lid => lid.classList.remove('blink'));
+            }, 150);
+            setTimeout(blink, Math.random() * 5000 + 2000);
+        }
+
+        updateClock();
+        blink();
+    </script>
+</body>
+</html>

@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced Radar Clock v2.0</title>
+    <style>
+        :root {
+            --neon-green: #00ff41;
+            --dark-bg: #050a05;
+            --scan-line: rgba(0, 255, 65, 0.1);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            background-color: var(--dark-bg);
+            background-image: 
+                linear-gradient(var(--scan-line) 1px, transparent 1px),
+                linear-gradient(90deg, var(--scan-line) 1px, transparent 1px);
+            background-size: 30px 30px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            overflow: hidden;
+            font-family: 'Courier New', monospace;
+            color: var(--neon-green);
+        }
+
+        /* Эффект старого монитора (шум) */
+        body::after {
+            content: " ";
+            position: fixed;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            background: rgba(18, 16, 16, 0.1);
+            opacity: 0.1;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        .main-container {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+        }
+
+        /* Инфо-панель сверху */
+        .info-top {
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            border-bottom: 1px solid var(--neon-green);
+            padding-bottom: 5px;
+            margin-bottom: 10px;
+        }
+
+        .radar-frame {
+            position: relative;
+            width: 350px;
+            height: 350px;
+            border: 4px double var(--neon-green);
+            border-radius: 50%;
+            padding: 10px;
+            box-shadow: 0 0 30px rgba(0, 255, 65, 0.2);
+        }
+
+        .radar-screen {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle, #0a1a0a 0%, #050a05 100%);
+            border-radius: 50%;
+            overflow: hidden;
+            border: 1px solid var(--neon-green);
+        }
+
+        /* Кольца разметки */
+        .ring {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            border: 1px solid rgba(0, 255, 65, 0.2);
+            border-radius: 50%;
+        }
+        .r1 { width: 33%; height: 33%; }
+        .r2 { width: 66%; height: 66%; }
+        .r3 { width: 100%; height: 100%; }
+
+        /* Осевые линии */
+        .axis {
+            position: absolute;
+            background: rgba(0, 255, 65, 0.2);
+        }
+        .axis-v { left: 50%; top: 0; width: 1px; height: 100%; }
+        .axis-h { top: 50%; left: 0; width: 100%; height: 1px; }
+
+        /* Сканирующий луч */
+        .sweep {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: conic-gradient(from 0deg, var(--neon-green) 0deg, transparent 60deg);
+            opacity: 0.3;
+            border-radius: 50%;
+            z-index: 2;
+        }
+
+        /* Стрелки (метки) */
+        .target {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform-origin: bottom center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            z-index: 5;
+        }
+
+        .marker {
+            width: 14px;
+            height: 14px;
+            border: 2px solid var(--neon-green);
+            background: rgba(0, 255, 65, 0.2);
+            position: relative;
+            box-shadow: 0 0 10px var(--neon-green);
+        }
+
+        .marker::before {
+            content: attr(data-label);
+            position: absolute;
+            top: -18px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 10px;
+            font-weight: bold;
+        }
+
+        /* Длина стрелок */
+        #h-hand { height: 75px; margin-top: -75px; }
+        #m-hand { height: 115px; margin-top: -115px; }
+        #s-hand { height: 150px; margin-top: -150px; color: #ff0055; }
+        #s-hand .marker { border-color: #ff0055; box-shadow: 0 0 10px #ff0055; }
+
+        /* Цифровой блок снизу */
+        .digital-panel {
+            background: rgba(0, 255, 65, 0.05);
+            padding: 10px 20px;
+            border: 1px solid var(--neon-green);
+            text-align: center;
+            min-width: 200px;
+        }
+
+        #digital-time {
+            font-size: 24px;
+            font-weight: bold;
+            letter-spacing: 3px;
+        }
+
+    </style>
+</head>
+<body>
+
+    <div class="main-container">
+        <div class="info-top">
+            <span id="status">Scanning...</span>
+            <span id="date">00.00.2026</span>
+        </div>
+
+        <div class="radar-frame">
+            <div class="radar-screen">
+                <div class="sweep" id="sweep"></div>
+                
+                <div class="ring r1"></div>
+                <div class="ring r2"></div>
+                <div class="ring r3"></div>
+                <div class="axis axis-v"></div>
+                <div class="axis axis-h"></div>
+
+                <div class="target" id="h-hand"><div class="marker" data-label="HRS"></div></div>
+                <div class="target" id="m-hand"><div class="marker" data-label="MIN"></div></div>
+                <div class="target" id="s-hand"><div class="marker" data-label="SEC"></div></div>
+            </div>
+        </div>
+
+        <div class="digital-panel">
+            <div id="digital-time">00:00:00</div>
+            <div style="font-size: 9px; margin-top: 5px;">SYSTEM CALIBRATED: 100%</div>
+        </div>
+    </div>
+
+    <script>
+        const hHand = document.getElementById('h-hand');
+        const mHand = document.getElementById('m-hand');
+        const sHand = document.getElementById('s-hand');
+        const sweep = document.getElementById('sweep');
+        const digitalClock = document.getElementById('digital-time');
+        const dateDisplay = document.getElementById('date');
+
+        function update() {
+            const now = new Date();
+            const h = now.getHours();
+            const m = now.getMinutes();
+            const s = now.getSeconds();
+            const ms = now.getMilliseconds();
+
+            // Углы
+            const hDeg = (h % 12) * 30 + (m / 60) * 30;
+            const mDeg = m * 6;
+            const sDeg = s * 6;
+            
+            // Плавное вращение луча (зависит от миллисекунд)
+            const sweepDeg = (s * 6) + (ms * 0.006);
+
+            // Применяем вращение
+            hHand.style.transform = `translateX(-50%) rotate(${hDeg}deg)`;
+            mHand.style.transform = `translateX(-50%) rotate(${mDeg}deg)`;
+            sHand.style.transform = `translateX(-50%) rotate(${sDeg}deg)`;
+            sweep.style.transform = `rotate(${sweepDeg}deg)`;
+
+            // Цифровое время
+            digitalClock.innerText = 
+                `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+            
+            // Дата
+            if(s === 0 || dateDisplay.innerText === "00.00.2026") {
+                const options = { year: 'numeric', month: '2-digit', day: '2-digit' };
+                dateDisplay.innerText = now.toLocaleDateString('ru-RU', options);
+            }
+
+            requestAnimationFrame(update);
+        }
+
+        update();
+    </script>
+</body>
+</html>

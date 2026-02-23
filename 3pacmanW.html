@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pac-Man Retro Clock</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            background-color: #000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            overflow: hidden;
+            font-family: 'Courier New', Courier, monospace;
+        }
+
+        .game-container {
+            position: relative;
+            width: 350px;
+            height: 350px;
+            border: 4px solid #2222ff;
+            border-radius: 50%;
+            box-shadow: 0 0 20px #2222ff;
+        }
+
+        /* Точки еды по кругу */
+        .dot {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background: #ffb8ae;
+            border-radius: 50%;
+            top: 50%;
+            left: 50%;
+            transform-origin: 0 0;
+        }
+
+        /* Пакман */
+        .pacman {
+            position: absolute;
+            width: 40px;
+            height: 40px;
+            background: #ffff00;
+            border-radius: 50%;
+            top: 50%;
+            left: 50%;
+            margin-top: -20px;
+            margin-left: -20px;
+            z-index: 10;
+        }
+
+        .pacman-mouth {
+            background: #000;
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            clip-path: polygon(50% 50%, 100% 25%, 100% 75%);
+            animation: eat 0.3s infinite;
+        }
+
+        @keyframes eat {
+            0%, 100% { clip-path: polygon(50% 50%, 100% 0, 100% 100%); }
+            50% { clip-path: polygon(50% 50%, 100% 50%, 100% 50%); }
+        }
+
+        /* Привидения (Стрелки) */
+        .ghost {
+            position: absolute;
+            width: 30px;
+            height: 35px;
+            top: 50%;
+            left: 50%;
+            margin-left: -15px;
+            z-index: 5;
+            transition: transform 0.5s cubic-bezier(0.4, 2, 0.5, 1);
+        }
+
+        /* Рисуем привидение через CSS */
+        .ghost-body {
+            width: 100%;
+            height: 80%;
+            background: var(--clr);
+            border-radius: 15px 15px 0 0;
+            position: relative;
+        }
+        .ghost-eyes {
+            position: absolute;
+            top: 8px; left: 5px; width: 20px; height: 8px;
+            display: flex; justify-content: space-around;
+        }
+        .ghost-eyes::before, .ghost-eyes::after {
+            content: ''; width: 6px; height: 6px; background: #fff; border-radius: 50%;
+        }
+
+        /* Время в центре */
+        .center-time {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #fff;
+            text-align: center;
+        }
+
+        #digital {
+            font-size: 32px;
+            font-weight: bold;
+            color: #ffff00;
+            text-shadow: 2px 2px #ff0000;
+        }
+
+        .label { font-size: 10px; color: #2222ff; text-transform: uppercase; }
+
+    </style>
+</head>
+<body>
+
+    <div class="game-container" id="dots-container">
+        <div class="center-time">
+            <div class="label">Ready!</div>
+            <div id="digital">00:00</div>
+        </div>
+
+        <div class="pacman" id="pacman">
+            <div class="pacman-mouth"></div>
+        </div>
+
+        <div class="ghost" id="g-hour" style="--clr: #ff0000;">
+            <div class="ghost-body"><div class="ghost-eyes"></div></div>
+        </div>
+
+        <div class="ghost" id="g-min" style="--clr: #00ffff;">
+            <div class="ghost-body"><div class="ghost-eyes"></div></div>
+        </div>
+    </div>
+
+    <script>
+        const dotsContainer = document.getElementById('dots-container');
+        const pacman = document.getElementById('pacman');
+        const gHour = document.getElementById('g-hour');
+        const gMin = document.getElementById('g-min');
+        const digital = document.getElementById('digital');
+
+        // Создаем 60 точек по кругу
+        for (let i = 0; i < 60; i++) {
+            const dot = document.createElement('div');
+            dot.className = 'dot';
+            const angle = (i * 6) * Math.PI / 180;
+            const radius = 160;
+            const x = Math.cos(angle - Math.PI/2) * radius;
+            const y = Math.sin(angle - Math.PI/2) * radius;
+            dot.style.transform = `translate(${x}px, ${y}px)`;
+            dot.id = `dot-${i}`;
+            dotsContainer.appendChild(dot);
+        }
+
+        function update() {
+            const now = new Date();
+            const h = now.getHours();
+            const m = now.getMinutes();
+            const s = now.getSeconds();
+            const ms = now.getMilliseconds();
+
+            // Пакман (Секунды)
+            const sAngle = (s * 6) + (ms * 0.006);
+            const sRad = (sAngle - 90) * Math.PI / 180;
+            const px = Math.cos(sRad) * 160;
+            const py = Math.sin(sRad) * 160;
+            pacman.style.transform = `translate(${px}px, ${py}px) rotate(${sAngle}deg)`;
+
+            // Скрываем «съеденные» точки
+            for (let i = 0; i < 60; i++) {
+                const dot = document.getElementById(`dot-${i}`);
+                dot.style.opacity = (i <= s) ? "0.1" : "1";
+            }
+
+            // Привидения (Часы и Минуты)
+            const hAngle = (h % 12 * 30) + (m / 2);
+            const mAngle = m * 6;
+
+            // Двигаем привидений по внутренним радиусам
+            moveGhost(gHour, hAngle, 70);
+            moveGhost(gMin, mAngle, 110);
+
+            // Цифровое табло
+            digital.innerText = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+
+            requestAnimationFrame(update);
+        }
+
+        function moveGhost(el, angle, dist) {
+            const rad = (angle - 90) * Math.PI / 180;
+            const x = Math.cos(rad) * dist;
+            const y = Math.sin(rad) * dist;
+            // Поворачиваем привидение, чтобы оно смотрело «вперед» по ходу движения
+            el.style.transform = `translate(${x}px, ${y}px)`;
+        }
+
+        update();
+    </script>
+</body>
+</html>
